@@ -82,10 +82,12 @@ void Object3dCommon::CreateRootSignature()
 
 void Object3dCommon::CreateGraphicsPipeline()
 {
-    // スライドの指示：最初にルートシグネチャの作成を呼び出す
+    // 最初にルートシグネチャの作成を呼び出す
     CreateRootSignature();
 
-    // --- main.cpp からパイプラインの生成処理をコピー ---
+    // -------------------------------------------------------------
+    // 【共通設定】頂点インプットレイアウトの定義
+    // -------------------------------------------------------------
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[3] = {};
     inputElementDesc[0].SemanticName = "POSITION";
     inputElementDesc[0].SemanticIndex = 0;
@@ -113,7 +115,9 @@ void Object3dCommon::CreateGraphicsPipeline()
     rastrizeDesc.CullMode = D3D12_CULL_MODE_BACK;
     rastrizeDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
-    // シェーダーのコンパイル
+    // -------------------------------------------------------------
+    // ① 通常の Object3D 用パイプライン生成
+    // -------------------------------------------------------------
     auto vertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0");
     auto pixelShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0");
 
@@ -124,7 +128,6 @@ void Object3dCommon::CreateGraphicsPipeline()
     graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() };
     graphicsPipelineStateDesc.BlendState = blendDesc;
     graphicsPipelineStateDesc.RasterizerState = rastrizeDesc;
-
     graphicsPipelineStateDesc.NumRenderTargets = 1;
     graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -141,6 +144,34 @@ void Object3dCommon::CreateGraphicsPipeline()
     HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
         &graphicsPipelineStateDesc,
         IID_PPV_ARGS(&graphicsPipelineState_)
+    );
+    assert(SUCCEEDED(hr));
+
+
+    // -------------------------------------------------------------
+    // ② ★ここから追加：Skybox専用パイプライン生成
+    // -------------------------------------------------------------
+    // Skybox用の新しく作ったシェーダーをコンパイル
+    auto skyboxVSBlob = dxCommon_->CompileShader(L"resources/shaders/Skybox.VS.hlsl", L"vs_6_0");
+    auto skyboxPSBlob = dxCommon_->CompileShader(L"resources/shaders/Skybox.PS.hlsl", L"ps_6_0");
+
+    // 基本設定は通常の3D用をベースにコピーする
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skyboxPsoDesc = graphicsPipelineStateDesc;
+    skyboxPsoDesc.VS = { skyboxVSBlob->GetBufferPointer(), skyboxVSBlob->GetBufferSize() };
+    skyboxPsoDesc.PS = { skyboxPSBlob->GetBufferPointer(), skyboxPSBlob->GetBufferSize() };
+
+    // ★スライドの設定をここに反映！
+    D3D12_DEPTH_STENCIL_DESC skyboxDepthStencilDesc{};
+    skyboxDepthStencilDesc.DepthEnable = true; // 比較はするので有効
+    skyboxDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // 書き込みはしない（ZERO）
+    skyboxDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 以下（LESS_EQUAL）
+
+    skyboxPsoDesc.DepthStencilState = skyboxDepthStencilDesc;
+
+    // Skybox用のパイプラインステートを作成
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+        &skyboxPsoDesc,
+        IID_PPV_ARGS(&graphicsPipelineStateSkybox_)
     );
     assert(SUCCEEDED(hr));
 }

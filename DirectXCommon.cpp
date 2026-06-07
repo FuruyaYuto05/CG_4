@@ -161,17 +161,40 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DirectXCommon::CreateDescriptorHeap
 DirectX::ScratchImage DirectXCommon::LoadTexture(const std::string& filePath)
 {
 	DirectX::ScratchImage image{};
-    
-    // StringUtility::ConvertString を使用
-	std::wstring filePathW = StringUtility::ConvertString(filePath); 
-    
-	HRESULT hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+
+	// StringUtility::ConvertString を使用して wstring に変換
+	std::wstring filePathW = StringUtility::ConvertString(filePath);
+
+	HRESULT hr;
+	// 1. 拡張子が「.dds」で終わっているかで読み込み関数を分岐
+	if (filePathW.ends_with(L".dds")) {
+		// DDS用。フォーマット情報が含まれているのでFLAGはNONE
+		hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
+	} else {
+		// 従来のPNGやJPG用
+		hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+	}
 	assert(SUCCEEDED(hr));
 
 	DirectX::ScratchImage mipImages{};
-    // ミップマップ生成
-	hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
-	assert(SUCCEEDED(hr));
+
+	// 2. 圧縮フォーマットかどうかに応じてミップマップ生成を分岐
+	if (DirectX::IsCompressed(image.GetMetadata().format)) {
+		// 圧縮されている場合は、ミップマップ生成をせずそのままmoveして使う
+		mipImages = std::move(image);
+	} else {
+		// 圧縮されていない（通常のPNGなど）なら、自動でミップマップを生成する
+		// ※第5引数は元コードの「0（全レベル生成）」に合わせています（スライドは4）
+		hr = DirectX::GenerateMipMaps(
+			image.GetImages(),
+			image.GetImageCount(),
+			image.GetMetadata(),
+			DirectX::TEX_FILTER_SRGB,
+			0,
+			mipImages
+		);
+		assert(SUCCEEDED(hr));
+	}
 
 	return mipImages;
 }

@@ -84,18 +84,23 @@ void TextureManager::LoadTexture(const std::string& filePath)
     textureData.metadata = mipImages.GetMetadata();
     textureData.resource = dxCommon->CreateTextureResource(textureData.metadata);
 
-    // --- SRV ハンドル計算 ---
-    uint32_t srvIndex = static_cast<uint32_t>(textureDatas.size() - 1) + kSRVIndexTop;
-
-    textureData.srvHandleCPU = dxCommon->GetSRVCPUDescriptorHandle(srvIndex);
-    textureData.srvHandleGPU = dxCommon->GetSRVGPUDescriptorHandle(srvIndex);
-
     // --- SRV の生成 ---
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = textureData.metadata.format;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = UINT(textureData.metadata.mipLevels);
+
+    // ★ ここにスライドの内容を書きます！
+    if (textureData.metadata.IsCubemap()) {
+        // キューブマップ（DDS）用の設定
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        srvDesc.TextureCube.MostDetailedMip = 0;
+        srvDesc.TextureCube.MipLevels = UINT_MAX;
+        srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+    } else {
+        // 今まで通り通常の2Dテクスチャ（PNGなど）用の設定
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = UINT(textureData.metadata.mipLevels);
+    }
 
     dxCommon->GetDevice()->CreateShaderResourceView(
         textureData.resource.Get(),

@@ -17,6 +17,15 @@ public: // メンバ関数
     // 共通描画設定
     void SetCommonDrawSetting();
 
+    // 既存の変数
+    ID3D12PipelineState* graphicsPipelineState_ = nullptr;
+
+    // ↓これを追加
+    ID3D12PipelineState* graphicsPipelineStateSkybox_ = nullptr;
+
+    // 👇 これを追加して外部からSkybox用のパイプラインを貰えるようにします
+    ID3D12PipelineState* GetGraphicsPipelineStateSkybox() const { return graphicsPipelineStateSkybox_; }
+
 private: // メンバ関数
     // ルートシグネチャの作成
     void CreateRootSignature();

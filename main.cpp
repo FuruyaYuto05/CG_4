@@ -28,7 +28,7 @@
 #include "Object3dCommon.h"
 #include "Object3d.h"
 #include "ModelManager.h"
-
+#include "Skybox.h"
 
 using namespace Microsoft::WRL;
 
@@ -657,7 +657,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 3Dオブジェクト共通部の初期化
 	object3dCommon = new Object3dCommon();
 	object3dCommon->Initialize(dxCommon);
+	Skybox* skybox = new Skybox();
 
+	skybox->Initialize(dxCommon, "resources/rostock_laage_airport_4k.dds");
 
 	////DXGIファクトリーの作成
 	IDXGIFactory7* dxgiFactory = nullptr;
@@ -1371,6 +1373,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// 描画
 			object3d_1->Draw();
 			object3d_2->Draw();
+
+			dxCommon->GetCommandList()->SetPipelineState(object3dCommon->GetGraphicsPipelineStateSkybox());
+
+			// 2. 立方体の描画コマンドを呼び出す
+			skybox->Draw(dxCommon->GetCommandList());
 
 			// Todo: 全てのObject3d個々の描画
 
