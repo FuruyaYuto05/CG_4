@@ -86,8 +86,10 @@ void Object3dCommon::CreateGraphicsPipeline()
     CreateRootSignature();
 
     // -------------------------------------------------------------
-    // 【共通設定】頂点インプットレイアウトの定義
+    // ① 通常の Object3D 用パイプライン生成（元のコードを維持）
     // -------------------------------------------------------------
+
+    // 【Object3D用】インプットレイアウト（POSITION, TEXCOORD, NORMAL の3つ）
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[3] = {};
     inputElementDesc[0].SemanticName = "POSITION";
     inputElementDesc[0].SemanticIndex = 0;
@@ -115,9 +117,7 @@ void Object3dCommon::CreateGraphicsPipeline()
     rastrizeDesc.CullMode = D3D12_CULL_MODE_BACK;
     rastrizeDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
-    // -------------------------------------------------------------
-    // ① 通常の Object3D 用パイプライン生成
-    // -------------------------------------------------------------
+    // 通常の Object3D 用シェーダーコンパイル
     auto vertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0");
     auto pixelShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0");
 
@@ -128,6 +128,7 @@ void Object3dCommon::CreateGraphicsPipeline()
     graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() };
     graphicsPipelineStateDesc.BlendState = blendDesc;
     graphicsPipelineStateDesc.RasterizerState = rastrizeDesc;
+
     graphicsPipelineStateDesc.NumRenderTargets = 1;
     graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -141,6 +142,7 @@ void Object3dCommon::CreateGraphicsPipeline()
     graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
     graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
+    // 通常のパイプラインステートを作成
     HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(
         &graphicsPipelineStateDesc,
         IID_PPV_ARGS(&graphicsPipelineState_)
@@ -149,22 +151,37 @@ void Object3dCommon::CreateGraphicsPipeline()
 
 
     // -------------------------------------------------------------
-    // ② ★ここから追加：Skybox専用パイプライン生成
+    // ② Skybox専用パイプライン生成（専用レイアウトを設定）
     // -------------------------------------------------------------
+
     // Skybox用の新しく作ったシェーダーをコンパイル
     auto skyboxVSBlob = dxCommon_->CompileShader(L"resources/shaders/Skybox.VS.hlsl", L"vs_6_0");
     auto skyboxPSBlob = dxCommon_->CompileShader(L"resources/shaders/Skybox.PS.hlsl", L"ps_6_0");
 
-    // 基本設定は通常の3D用をベースにコピーする
+    // 【修正点】Skybox専用のInputLayout（位置座標 POSITION のみ、要素数は1つだけ）
+    D3D12_INPUT_ELEMENT_DESC skyboxInputElementDesc[1] = {};
+    skyboxInputElementDesc[0].SemanticName = "POSITION";
+    skyboxInputElementDesc[0].SemanticIndex = 0;
+    skyboxInputElementDesc[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    skyboxInputElementDesc[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+    D3D12_INPUT_LAYOUT_DESC skyboxInputLayoutDesc{};
+    skyboxInputLayoutDesc.pInputElementDescs = skyboxInputElementDesc;
+    skyboxInputLayoutDesc.NumElements = _countof(skyboxInputElementDesc); // 要素数 1
+
+    // 記述子を一旦通常のベースからコピー
     D3D12_GRAPHICS_PIPELINE_STATE_DESC skyboxPsoDesc = graphicsPipelineStateDesc;
+
+    // Skybox専用のInputLayoutとシェーダーを設定
+    skyboxPsoDesc.InputLayout = skyboxInputLayoutDesc; // 👈 流用せず専用のものをセット！
     skyboxPsoDesc.VS = { skyboxVSBlob->GetBufferPointer(), skyboxVSBlob->GetBufferSize() };
     skyboxPsoDesc.PS = { skyboxPSBlob->GetBufferPointer(), skyboxPSBlob->GetBufferSize() };
 
-    // ★スライドの設定をここに反映！
+    // 深度設定（スライドの指示通り、LESS_EQUALかつZERO）
     D3D12_DEPTH_STENCIL_DESC skyboxDepthStencilDesc{};
-    skyboxDepthStencilDesc.DepthEnable = true; // 比較はするので有効
-    skyboxDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // 書き込みはしない（ZERO）
-    skyboxDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 以下（LESS_EQUAL）
+    skyboxDepthStencilDesc.DepthEnable = true;
+    skyboxDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // 書き込みをOFFにして無駄を省く
+    skyboxDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 1.0の描画を許容する
 
     skyboxPsoDesc.DepthStencilState = skyboxDepthStencilDesc;
 
