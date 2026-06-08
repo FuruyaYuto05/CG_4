@@ -241,7 +241,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	object3dCommon->Initialize(dxCommon);
 	Skybox* skybox = new Skybox();
 
-	skybox->Initialize(dxCommon, "resources/rostock_laage_airport_4k.dds");
+	const std::string kSkyboxTexturePath = "resources/rostock_laage_airport_4k.dds";
+	skybox->Initialize(dxCommon, kSkyboxTexturePath); 
 
 	////DXGIファクトリーの作成
 	IDXGIFactory7* dxgiFactory = nullptr;
