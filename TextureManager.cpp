@@ -56,25 +56,47 @@ void TextureManager::LoadTexture(const std::string& filePath)
     DirectX::ScratchImage image{};
     std::wstring filePathW = StringUtility::ConvertString(filePath);
 
-    HRESULT hr = DirectX::LoadFromWICFile(
-        filePathW.c_str(),
-        DirectX::WIC_FLAGS_FORCE_SRGB,
-        nullptr,
-        image
-    );
+    HRESULT hr;
+
+    if (filePathW.ends_with(L".dds")) {
+        hr = DirectX::LoadFromDDSFile(
+            filePathW.c_str(),
+            DirectX::DDS_FLAGS_NONE,
+            nullptr,
+            image
+        );
+    } else {
+        hr = DirectX::LoadFromWICFile(
+            filePathW.c_str(),
+            DirectX::WIC_FLAGS_FORCE_SRGB,
+            nullptr,
+            image
+        );
+    }
     assert(SUCCEEDED(hr));
+
+    auto meta = image.GetMetadata();
+
+    assert(meta.width > 0);
+    assert(meta.height > 0);
+    assert(meta.arraySize > 0);
 
     DirectX::ScratchImage mipImages{};
-    hr = DirectX::GenerateMipMaps(
-        image.GetImages(),
-        image.GetImageCount(),
-        image.GetMetadata(),
-        DirectX::TEX_FILTER_SRGB,
-        0,
-        mipImages
-    );
-    assert(SUCCEEDED(hr));
 
+    if (filePathW.ends_with(L".dds")) {
+        // DDS(Cubemap)はGenerateMipMapsしない
+        mipImages = std::move(image);
+    } else {
+        hr = DirectX::GenerateMipMaps(
+            image.GetImages(),
+            image.GetImageCount(),
+            image.GetMetadata(),
+            DirectX::TEX_FILTER_SRGB,
+            0,
+            mipImages
+        );
+        assert(SUCCEEDED(hr));
+    }
     // --- テクスチャデータ追加 ---
     textureDatas.resize(textureDatas.size() + 1);
     TextureData& textureData = textureDatas.back();
@@ -83,6 +105,17 @@ void TextureManager::LoadTexture(const std::string& filePath)
     textureData.filePath = filePath;
     textureData.metadata = mipImages.GetMetadata();
     textureData.resource = dxCommon->CreateTextureResource(textureData.metadata);
+
+    uint32_t textureIndex =
+        static_cast<uint32_t>(textureDatas.size() - 1);
+
+    uint32_t srvIndex = textureIndex + kSRVIndexTop;
+
+    textureData.srvHandleCPU =
+        dxCommon->GetSRVCPUDescriptorHandle(srvIndex);
+
+    textureData.srvHandleGPU =
+        dxCommon->GetSRVGPUDescriptorHandle(srvIndex);
 
     // --- SRV の生成 ---
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};

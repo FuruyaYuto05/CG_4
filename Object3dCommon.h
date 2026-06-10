@@ -38,5 +38,5 @@ private: // メンバ変数
     // ルートシグネチャ
     ID3D12RootSignature* rootSignature_ = nullptr;
     // グラフィックスパイプラインステート
-    ID3D12PipelineState* graphicsPipelineState_ = nullptr;
+    //ID3D12PipelineState* graphicsPipelineState_ = nullptr;
 };

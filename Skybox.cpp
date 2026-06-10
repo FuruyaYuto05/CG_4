@@ -104,7 +104,18 @@ void Skybox::Draw(ID3D12GraphicsCommandList* commandList)
     // テクスチャ（キューブマップ）のSRVをルートパラメータにセット
     // ※引数のインデックス（例：1）や、DescriptorHeapのハンドル取得方法はお使いのシステムに合わせて調整してください
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(textureIndex_);
-    commandList->SetGraphicsRootDescriptorTable(1, srvHandle); // ルートパラメータ番号は仮に「1」としています
+    char buf[128];
+    sprintf_s(buf, "textureIndex_ = %u\n", textureIndex_);
+    OutputDebugStringA(buf);
+
+ srvHandle =
+        TextureManager::GetInstance()->GetSrvHandleGPU(textureIndex_);
+
+    sprintf_s(buf, "srvHandle.ptr = %llu\n", srvHandle.ptr);
+    OutputDebugStringA(buf);
+
+    assert(srvHandle.ptr != 0);
+    commandList->SetGraphicsRootDescriptorTable(2, srvHandle); // ルートパラメータ番号は仮に「1」としています
 
     // インデックスを用いた描画（36インデックス、1インスタンス）
     commandList->DrawIndexedInstanced(36, 1, 0, 0, 0);
