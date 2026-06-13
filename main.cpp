@@ -15,6 +15,7 @@
 #include <fstream>
 #include <sstream>
 #include <random>
+#include <cmath>
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -489,36 +490,53 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	auto MakeNewParticle = [](std::mt19937& randomEngine) -> Particle
 		{
-			std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
-			std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
-			std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
+			std::uniform_real_distribution<float> distAngle(0.0f, 6.28f);
+			std::uniform_real_distribution<float> distSpeed(0.5f, 1.5f);
+			std::uniform_real_distribution<float> distScaleY(0.4f, 1.5f);
+			std::uniform_real_distribution<float> distTime(0.3f, 0.8f);
 
 			Particle particle;
 
-			particle.transform.scale = { 1.0f, 1.0f, 1.0f };
-			particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+			float angle = distAngle(randomEngine);
+			float speed = distSpeed(randomEngine);
 
+			// 細長いPlaneにする
+			particle.transform.scale = {
+				0.03f,
+				distScaleY(randomEngine),
+				1.0f
+			};
+
+			// 放射状に回転させる
+			particle.transform.rotate = {
+				0.0f,
+				0.0f,
+				angle
+			};
+
+			// 中心から出す
 			particle.transform.translate = {
-				distribution(randomEngine),
-				distribution(randomEngine),
-				distribution(randomEngine)
+				0.0f,
+				0.0f,
+				0.0f
 			};
 
+			// 動かさない
 			particle.velocity = {
-				distribution(randomEngine),
-				distribution(randomEngine),
-				distribution(randomEngine)
+				0.0f,
+				0.0f,
+				0.0f
 			};
 
+			// HitEffectっぽく白にする
 			particle.color = {
-				distColor(randomEngine),
-				distColor(randomEngine),
-				distColor(randomEngine),
+				1.0f,
+				1.0f,
+				1.0f,
 				1.0f
 			};
 
 			particle.lifeTime = distTime(randomEngine);
-
 			particle.currentTime = 0.0f;
 
 			return particle;
