@@ -265,30 +265,125 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	IDxcIncludeHandler* includeHandler = nullptr;
 
-	//RootSignatureの作成
-	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
-	descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
+	assert(SUCCEEDED(hr));
 
-	D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-	descriptorRange[0].BaseShaderRegister = 0;
-	descriptorRange[0].NumDescriptors = 1;
-	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
+	assert(SUCCEEDED(hr));
 
-	//RootParmater作成
-	D3D12_ROOT_PARAMETER rootParameters[3] = {};
-	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParameters[0].Descriptor.ShaderRegister = 0;
-	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-	rootParameters[1].Descriptor.ShaderRegister = 0;
-	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
-	rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
-	descriptionRootSignature.pParameters = rootParameters;
-	descriptionRootSignature.NumParameters = _countof(rootParameters);
+	hr = dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
+	assert(SUCCEEDED(hr));
+
+	// ==================================================
+	// Object3d用 RootSignature
+	// ==================================================
+	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignatureForObject{};
+	descriptionRootSignatureForObject.Flags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	// Texture用SRV
+	D3D12_DESCRIPTOR_RANGE descriptorRangeForObjectTexture[1] = {};
+	descriptorRangeForObjectTexture[0].BaseShaderRegister = 0;
+	descriptorRangeForObjectTexture[0].NumDescriptors = 1;
+	descriptorRangeForObjectTexture[0].RangeType =
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descriptorRangeForObjectTexture[0].OffsetInDescriptorsFromTableStart =
+		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// Object3d用RootParameter
+	D3D12_ROOT_PARAMETER rootParametersForObject[3] = {};
+
+	// Material用 b0
+	rootParametersForObject[0].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParametersForObject[0].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParametersForObject[0].Descriptor.ShaderRegister = 0;
+
+	// Transform用 b0
+	// Object3dでは今まで通りCBV
+	rootParametersForObject[1].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParametersForObject[1].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParametersForObject[1].Descriptor.ShaderRegister = 0;
+
+	// Texture用 t0
+	rootParametersForObject[2].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParametersForObject[2].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParametersForObject[2].DescriptorTable.pDescriptorRanges =
+		descriptorRangeForObjectTexture;
+	rootParametersForObject[2].DescriptorTable.NumDescriptorRanges =
+		_countof(descriptorRangeForObjectTexture);
+
+	descriptionRootSignatureForObject.pParameters =
+		rootParametersForObject;
+	descriptionRootSignatureForObject.NumParameters =
+		_countof(rootParametersForObject);
+
+
+	// ==================================================
+// Particle用 RootSignature
+// ==================================================
+	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignatureForParticle{};
+	descriptionRootSignatureForParticle.Flags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	// ParticleのTexture用SRV
+	D3D12_DESCRIPTOR_RANGE descriptorRangeForParticleTexture[1] = {};
+	descriptorRangeForParticleTexture[0].BaseShaderRegister = 0;
+	descriptorRangeForParticleTexture[0].NumDescriptors = 1;
+	descriptorRangeForParticleTexture[0].RangeType =
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descriptorRangeForParticleTexture[0].OffsetInDescriptorsFromTableStart =
+		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// Instancing用StructuredBuffer SRV
+	D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
+	descriptorRangeForInstancing[0].BaseShaderRegister = 0;
+	descriptorRangeForInstancing[0].NumDescriptors = 1;
+	descriptorRangeForInstancing[0].RangeType =
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart =
+		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// Particle用RootParameter
+	D3D12_ROOT_PARAMETER rootParametersForParticle[3] = {};
+
+	// Material用 b0
+	rootParametersForParticle[0].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParametersForParticle[0].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParametersForParticle[0].Descriptor.ShaderRegister = 0;
+
+	// Instancing用 t0
+	// ここがスライドで変更する場所
+	rootParametersForParticle[1].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParametersForParticle[1].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParametersForParticle[1].DescriptorTable.pDescriptorRanges =
+		descriptorRangeForInstancing;
+	rootParametersForParticle[1].DescriptorTable.NumDescriptorRanges =
+		_countof(descriptorRangeForInstancing);
+
+	// Texture用 t0
+	rootParametersForParticle[2].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParametersForParticle[2].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParametersForParticle[2].DescriptorTable.pDescriptorRanges =
+		descriptorRangeForParticleTexture;
+	rootParametersForParticle[2].DescriptorTable.NumDescriptorRanges =
+		_countof(descriptorRangeForParticleTexture);
+
+	descriptionRootSignatureForParticle.pParameters =
+		rootParametersForParticle;
+	descriptionRootSignatureForParticle.NumParameters =
+		_countof(rootParametersForParticle);
 
 	//Samplerの設定
 	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
@@ -300,25 +395,135 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
 	staticSamplers[0].ShaderRegister = 0;
 	staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	descriptionRootSignature.pStaticSamplers = staticSamplers;
-	descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
+	descriptionRootSignatureForObject.pStaticSamplers = staticSamplers;
+	descriptionRootSignatureForObject.NumStaticSamplers = _countof(staticSamplers);
+
+	descriptionRootSignatureForParticle.pStaticSamplers = staticSamplers;
+	descriptionRootSignatureForParticle.NumStaticSamplers = _countof(staticSamplers);
 
 
-	ID3DBlob* signatureBlob = nullptr;
-	ID3DBlob* errorBlob = nullptr;
-	hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+	// ==================================================
+// Object3d用 RootSignature を作成
+// ==================================================
+	ID3DBlob* objectSignatureBlob = nullptr;
+	ID3DBlob* objectErrorBlob = nullptr;
+
+	hr = D3D12SerializeRootSignature(
+		&descriptionRootSignatureForObject,
+		D3D_ROOT_SIGNATURE_VERSION_1,
+		&objectSignatureBlob,
+		&objectErrorBlob
+	);
+
 	if (FAILED(hr)) {
-		Log(reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
+		Log(reinterpret_cast<char*>(objectErrorBlob->GetBufferPointer()));
 		assert(false);
 	}
-	ID3D12RootSignature* rootSignature = nullptr;
+
+	ID3D12RootSignature* objectRootSignature = nullptr;
 	hr = dxCommon->GetDevice()->CreateRootSignature(
 		0,
-		signatureBlob->GetBufferPointer(),
-		signatureBlob->GetBufferSize(),
-		IID_PPV_ARGS(&rootSignature) // rootSignatureはまだローカル変数なので、&を維持
+		objectSignatureBlob->GetBufferPointer(),
+		objectSignatureBlob->GetBufferSize(),
+		IID_PPV_ARGS(&objectRootSignature)
 	);
 	assert(SUCCEEDED(hr));
+
+
+	// ==================================================
+	// Particle用 RootSignature を作成
+	// ==================================================
+	ID3DBlob* particleSignatureBlob = nullptr;
+	ID3DBlob* particleErrorBlob = nullptr;
+
+	hr = D3D12SerializeRootSignature(
+		&descriptionRootSignatureForParticle,
+		D3D_ROOT_SIGNATURE_VERSION_1,
+		&particleSignatureBlob,
+		&particleErrorBlob
+	);
+
+	if (FAILED(hr)) {
+		Log(reinterpret_cast<char*>(particleErrorBlob->GetBufferPointer()));
+		assert(false);
+	}
+
+	ID3D12RootSignature* particleRootSignature = nullptr;
+	hr = dxCommon->GetDevice()->CreateRootSignature(
+		0,
+		particleSignatureBlob->GetBufferPointer(),
+		particleSignatureBlob->GetBufferSize(),
+		IID_PPV_ARGS(&particleRootSignature)
+	);
+	assert(SUCCEEDED(hr));
+
+// ==================================================
+// Instancing用Resourceの作成
+// ==================================================
+
+// インスタンス数
+	const uint32_t kNumInstance = 10;
+
+	// Instancing用の変換行列データ
+	struct TransformationMatrix
+	{
+		Math::Matrix4x4 WVP;
+		Math::Matrix4x4 World;
+	};
+
+	// Instancing用Resourceを作る
+	ComPtr<ID3D12Resource> instancingResource =
+		dxCommon->CreateBufferResource(sizeof(TransformationMatrix) * kNumInstance);
+
+	// 書き込むためのアドレスを取得
+	TransformationMatrix* instancingData = nullptr;
+
+	instancingResource->Map(
+		0,
+		nullptr,
+		reinterpret_cast<void**>(&instancingData)
+	);
+
+	// 単位行列を書き込んでおく
+	for (uint32_t index = 0; index < kNumInstance; ++index) {
+		instancingData[index].WVP = Math::MakeIdentity4x4();
+		instancingData[index].World = Math::MakeIdentity4x4();
+	}
+
+	// ==================================================
+    // Instancing用SRVの作成
+    // ==================================================
+	D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
+	instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	instancingSrvDesc.Shader4ComponentMapping =
+		D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	instancingSrvDesc.Buffer.FirstElement = 0;
+	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	instancingSrvDesc.Buffer.NumElements = kNumInstance;
+	instancingSrvDesc.Buffer.StructureByteStride = sizeof(TransformationMatrix);
+
+	// 今回はSRVヒープの3番をInstancing用に使う
+	dxCommon->GetDevice()->CreateShaderResourceView(
+		instancingResource.Get(),
+		&instancingSrvDesc,
+		dxCommon->GetSRVCPUDescriptorHandle(3)
+	);
+
+	// ==================================================
+// Instancing用Transformの作成
+// ==================================================
+	Math::Transform transforms[kNumInstance];
+
+	for (uint32_t index = 0; index < kNumInstance; ++index) {
+		transforms[index].scale = { 1.0f, 1.0f, 1.0f };
+		transforms[index].rotate = { 0.0f, 0.0f, 0.0f };
+		transforms[index].translate = {
+			index * 0.1f,
+			index * 0.1f,
+			index * 0.1f
+		};
+	}
 
 	D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
 	inputElementDesc[0].SemanticName = "POSITION";
@@ -335,16 +540,152 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	D3D12_BLEND_DESC blendDesc{};
 	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	blendDesc.RenderTarget[0].BlendEnable = TRUE;
+
+	blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+
+	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
 
 	D3D12_RASTERIZER_DESC rastrizeDesc{};
-	rastrizeDesc.CullMode = D3D12_CULL_MODE_BACK;
+	rastrizeDesc.CullMode = D3D12_CULL_MODE_NONE;
 	rastrizeDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
 	depthStencilDesc.DepthEnable = true;
 	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+
+
+	// ==================================================
+// Particle用 Shader をCompile
+// ==================================================
+	IDxcBlob* particleVertexShaderBlob = CompileShader(
+		L"resources/shaders/Particle.VS.hlsl",
+		L"vs_6_0",
+		dxcUtils,
+		dxcCompiler,
+		includeHandler
+	);
+	assert(particleVertexShaderBlob != nullptr);
+
+	IDxcBlob* particlePixelShaderBlob = CompileShader(
+		L"resources/shaders/Particle.PS.hlsl",
+		L"ps_6_0",
+		dxcUtils,
+		dxcCompiler,
+		includeHandler
+	);
+	assert(particlePixelShaderBlob != nullptr);
+
+
+	// ==================================================
+	// Particle用 PipelineState を作成
+	// ==================================================
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC particleGraphicsPipelineStateDesc{};
+	particleGraphicsPipelineStateDesc.pRootSignature = particleRootSignature;
+	particleGraphicsPipelineStateDesc.InputLayout = inputLayOutDesc;
+	particleGraphicsPipelineStateDesc.VS = {
+		particleVertexShaderBlob->GetBufferPointer(),
+		particleVertexShaderBlob->GetBufferSize()
+	};
+	particleGraphicsPipelineStateDesc.PS = {
+		particlePixelShaderBlob->GetBufferPointer(),
+		particlePixelShaderBlob->GetBufferSize()
+	};
+	particleGraphicsPipelineStateDesc.BlendState = blendDesc;
+	particleGraphicsPipelineStateDesc.RasterizerState = rastrizeDesc;
+	particleGraphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
+	particleGraphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	particleGraphicsPipelineStateDesc.NumRenderTargets = 1;
+	particleGraphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	particleGraphicsPipelineStateDesc.PrimitiveTopologyType =
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	particleGraphicsPipelineStateDesc.SampleDesc.Count = 1;
+	particleGraphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+	ID3D12PipelineState* particleGraphicsPipelineState = nullptr;
+	hr = dxCommon->GetDevice()->CreateGraphicsPipelineState(
+		&particleGraphicsPipelineStateDesc,
+		IID_PPV_ARGS(&particleGraphicsPipelineState)
+	);
+	assert(SUCCEEDED(hr));
+
+
+
+	// ==================================================
+// Particle用 頂点データ
+// ==================================================
+	struct ParticleVertexData
+	{
+		Math::Vector4 position;
+		Math::Vector2 texcoord;
+	};
+
+	ComPtr<ID3D12Resource> particleVertexResource =
+		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * 6);
+
+	D3D12_VERTEX_BUFFER_VIEW particleVertexBufferView{};
+	particleVertexBufferView.BufferLocation =
+		particleVertexResource->GetGPUVirtualAddress();
+	particleVertexBufferView.SizeInBytes =
+		sizeof(ParticleVertexData) * 6;
+	particleVertexBufferView.StrideInBytes =
+		sizeof(ParticleVertexData);
+
+	ParticleVertexData* particleVertexData = nullptr;
+	particleVertexResource->Map(
+		0,
+		nullptr,
+		reinterpret_cast<void**>(&particleVertexData)
+	);
+
+	// 1枚目の三角形
+	particleVertexData[0].position = { -0.5f, -0.5f, 0.0f, 1.0f };
+	particleVertexData[0].texcoord = { 0.0f, 1.0f };
+
+	particleVertexData[1].position = { -0.5f,  0.5f, 0.0f, 1.0f };
+	particleVertexData[1].texcoord = { 0.0f, 0.0f };
+
+	particleVertexData[2].position = { 0.5f, -0.5f, 0.0f, 1.0f };
+	particleVertexData[2].texcoord = { 1.0f, 1.0f };
+
+	// 2枚目の三角形
+	particleVertexData[3].position = { -0.5f,  0.5f, 0.0f, 1.0f };
+	particleVertexData[3].texcoord = { 0.0f, 0.0f };
+
+	particleVertexData[4].position = { 0.5f,  0.5f, 0.0f, 1.0f };
+	particleVertexData[4].texcoord = { 1.0f, 0.0f };
+
+	particleVertexData[5].position = { 0.5f, -0.5f, 0.0f, 1.0f };
+	particleVertexData[5].texcoord = { 1.0f, 1.0f };
+
+
+	// ==================================================
+// Particle用 MaterialResource
+// ==================================================
+	struct ParticleMaterial
+	{
+		Math::Vector4 color;
+		Math::Matrix4x4 uvTransform;
+	};
+
+	ComPtr<ID3D12Resource> particleMaterialResource =
+		dxCommon->CreateBufferResource(sizeof(ParticleMaterial));
+
+	ParticleMaterial* particleMaterialData = nullptr;
+	particleMaterialResource->Map(
+		0,
+		nullptr,
+		reinterpret_cast<void**>(&particleMaterialData)
+	);
+
+	particleMaterialData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	particleMaterialData->uvTransform = Math::MakeIdentity4x4();
 
 
 	D3D12_HEAP_PROPERTIES uploadHeapProperties{};
@@ -368,7 +709,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	dxCommon->GetDevice()->CreateShaderResourceView(
 		textureResource.Get(), // ComPtrなので .Get()
 		&srvDesc,
-		dxCommon->GetSRVCPUDescriptorHandle(0) // 0番目のSRVヒープスロットを使用すると仮定
+		dxCommon->GetSRVCPUDescriptorHandle(4) // 0番目のSRVヒープスロットを使用すると仮定
 	);
 
 	//ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
@@ -446,6 +787,25 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		{
 			//入力の更新  <= ❌ 初期化時に一度だけ呼ばれている
 			input->Update();
+
+
+			Math::Matrix4x4 viewProjectionMatrix = Math::MakeIdentity4x4();
+
+			for (uint32_t index = 0; index < kNumInstance; ++index) {
+				Math::Matrix4x4 worldMatrix =
+					Math::MakeAffineMatrix(
+						transforms[index].scale,
+						transforms[index].rotate,
+						transforms[index].translate
+					);
+
+				Math::Matrix4x4 worldViewProjectionMatrix =
+					Math::Multiply(worldMatrix, viewProjectionMatrix);
+
+				instancingData[index].WVP = worldViewProjectionMatrix;
+				instancingData[index].World = worldMatrix;
+			}
+
 
 			//object3d->Update();
 
@@ -556,13 +916,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//object3d->Draw();
 
 			// 描画
-			object3d_1->Draw();
-			object3d_2->Draw();
+			
+			//左
+			//object3d_1->Draw();
+			//右
+			//object3d_2->Draw();
 
-			dxCommon->GetCommandList()->SetPipelineState(object3dCommon->GetGraphicsPipelineStateSkybox());
+			//dxCommon->GetCommandList()->SetPipelineState(object3dCommon->GetGraphicsPipelineStateSkybox());
 
 			// 2. 立方体の描画コマンドを呼び出す
-			skybox->Draw(dxCommon->GetCommandList());
+			//skybox->Draw(dxCommon->GetCommandList());
 
 			// Todo: 全てのObject3d個々の描画
 
@@ -574,13 +937,51 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			spriteCommon->SetCommonDrawSettings(dxCommon->GetCommandList());
 
 			// [NEW] Sprite::Draw() を呼び出し、個別の描画コマンドを積む
-			sprite->Draw(dxCommon->GetCommandList());
+			//sprite->Draw(dxCommon->GetCommandList());
+			//for (Sprite* sprite : sprites) {
+			//	sprite->Draw(dxCommon->GetCommandList());
+			//}
 
-			// 2. 個別スプライトの描画
-   //        vector の要素を一つずつ取り出し、Drawを呼び出す
-			for (Sprite* sprite : sprites) {
-				sprite->Draw(dxCommon->GetCommandList());
-			}
+
+			ID3D12GraphicsCommandList* commandList = dxCommon->GetCommandList();
+
+			// Particle用RootSignature
+			commandList->SetGraphicsRootSignature(particleRootSignature);
+
+			// Particle用PipelineState
+			commandList->SetPipelineState(particleGraphicsPipelineState);
+
+			// 頂点バッファ
+			commandList->IASetVertexBuffers(0, 1, &particleVertexBufferView);
+
+			// 三角形リスト
+			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			// Material b0
+			commandList->SetGraphicsRootConstantBufferView(
+				0,
+				particleMaterialResource->GetGPUVirtualAddress()
+			);
+
+			// Instancing用SRV t0 / rootParameter[1]
+			commandList->SetGraphicsRootDescriptorTable(
+				1,
+				dxCommon->GetSRVGPUDescriptorHandle(3)
+			);
+
+			// Texture用SRV t0 / rootParameter[2]
+			commandList->SetGraphicsRootDescriptorTable(
+				2,
+				dxCommon->GetSRVGPUDescriptorHandle(4)
+			);
+
+			// 6頂点の板ポリを10個描画
+			commandList->DrawInstanced(
+				6,
+				kNumInstance,
+				0,
+				0
+			);
 
 
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), dxCommon->GetCommandList());
@@ -615,9 +1016,35 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
-	signatureBlob->Release();
-	if (errorBlob) {
-		errorBlob->Release();
+	if (objectSignatureBlob) {
+		objectSignatureBlob->Release();
+	}
+	if (objectErrorBlob) {
+		objectErrorBlob->Release();
+	}
+
+	if (particleSignatureBlob) {
+		particleSignatureBlob->Release();
+	}
+	if (particleErrorBlob) {
+		particleErrorBlob->Release();
+	}
+
+	if (objectRootSignature) {
+		objectRootSignature->Release();
+	}
+	if (particleRootSignature) {
+		particleRootSignature->Release();
+	}
+
+	if (particleVertexShaderBlob) {
+		particleVertexShaderBlob->Release();
+	}
+	if (particlePixelShaderBlob) {
+		particlePixelShaderBlob->Release();
+	}
+	if (particleGraphicsPipelineState) {
+		particleGraphicsPipelineState->Release();
 	}
 
 	// スプライトの解放
