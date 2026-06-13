@@ -392,7 +392,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//Samplerの設定
 	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
 	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 	staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
@@ -466,7 +466,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 // ==================================================
 
 // インスタンス数
-	const uint32_t kNumMaxInstance = 6;
+	const uint32_t kNumMaxInstance = 1;
 
 	std::random_device seedGenerator;
 	std::mt19937 randomEngine(seedGenerator());
@@ -502,20 +502,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 			particle.transform.scale = {
-	            0.20f,
-            	0.35f,
-	            1.0f
+	            0.25f,
+	            0.25f,
+	            0.25f
 			};
 
 			particle.transform.rotate = {
-				0.0f,
-				0.0f,
-				angle
+	            1.2f,
+	            0.0f,
+	            0.0f
 			};
 
 			particle.transform.translate = {
 				0.0f,
-				0.0f,
+				-0.4f,
 				0.0f
 			};
 
@@ -529,7 +529,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				1.0f,
 				1.0f,
 				1.0f,
-				0.6f
+				1.0f
 			};
 
 			particle.lifeTime = distTime(randomEngine);
@@ -693,6 +693,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const float kInnerRadius = 0.9f;
 	const float radianPerDivide = 2.0f * 3.14159265f / float(kRingDivide);
 
+	const uint32_t kCylinderDivide = 32;
+	const float kTopRadius = 1.0f;
+	const float kBottomRadius = 1.0f;
+	const float kHeight = 1.5f;
+	const float cylinderRadianPerDivide =
+		2.0f * 3.14159265f / float(kCylinderDivide);
 
 	ComPtr<ID3D12Resource> ringVertexResource =
 		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * kRingDivide * 6);
@@ -818,6 +824,92 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
+    // Cylinder用 頂点データ
+    // ==================================================
+	ComPtr<ID3D12Resource> cylinderVertexResource =
+		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * kCylinderDivide * 6);
+
+	D3D12_VERTEX_BUFFER_VIEW cylinderVertexBufferView{};
+	cylinderVertexBufferView.BufferLocation =
+		cylinderVertexResource->GetGPUVirtualAddress();
+	cylinderVertexBufferView.SizeInBytes =
+		sizeof(ParticleVertexData) * kCylinderDivide * 6;
+	cylinderVertexBufferView.StrideInBytes =
+		sizeof(ParticleVertexData);
+
+	ParticleVertexData* cylinderVertexData = nullptr;
+	cylinderVertexResource->Map(
+		0,
+		nullptr,
+		reinterpret_cast<void**>(&cylinderVertexData)
+	);
+
+	for (uint32_t index = 0; index < kCylinderDivide; ++index) {
+
+		float sin = std::sin(index * cylinderRadianPerDivide);
+		float cos = std::cos(index * cylinderRadianPerDivide);
+
+		float sinNext = std::sin((index + 1) * cylinderRadianPerDivide);
+		float cosNext = std::cos((index + 1) * cylinderRadianPerDivide);
+
+		float u = float(index) / float(kCylinderDivide);
+		float uNext = float(index + 1) / float(kCylinderDivide);
+
+		uint32_t vertexIndex = index * 6;
+
+		// 1枚目の三角形
+		cylinderVertexData[vertexIndex + 0].position = {
+			-sin * kTopRadius,
+			kHeight,
+			cos * kTopRadius,
+			1.0f
+		};
+		cylinderVertexData[vertexIndex + 0].texcoord = { u, 0.0f };
+
+		cylinderVertexData[vertexIndex + 1].position = {
+			-sinNext * kTopRadius,
+			kHeight,
+			cosNext * kTopRadius,
+			1.0f
+		};
+		cylinderVertexData[vertexIndex + 1].texcoord = { uNext, 0.0f };
+
+		cylinderVertexData[vertexIndex + 2].position = {
+			-sin * kBottomRadius,
+			0.0f,
+			cos * kBottomRadius,
+			1.0f
+		};
+		cylinderVertexData[vertexIndex + 2].texcoord = { u, 1.0f };
+
+		// 2枚目の三角形
+		cylinderVertexData[vertexIndex + 3].position = {
+			-sinNext * kTopRadius,
+			kHeight,
+			cosNext * kTopRadius,
+			1.0f
+		};
+		cylinderVertexData[vertexIndex + 3].texcoord = { uNext, 0.0f };
+
+		cylinderVertexData[vertexIndex + 4].position = {
+			-sinNext * kBottomRadius,
+			0.0f,
+			cosNext * kBottomRadius,
+			1.0f
+		};
+		cylinderVertexData[vertexIndex + 4].texcoord = { uNext, 1.0f };
+
+		cylinderVertexData[vertexIndex + 5].position = {
+			-sin * kBottomRadius,
+			0.0f,
+			cos * kBottomRadius,
+			1.0f
+		};
+		cylinderVertexData[vertexIndex + 5].texcoord = { u, 1.0f };
+	}
+
+
+	// ==================================================
     // Particle用 MaterialResource
     // ==================================================
 	struct ParticleMaterial
@@ -836,14 +928,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		reinterpret_cast<void**>(&particleMaterialData)
 	);
 
-	particleMaterialData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	particleMaterialData->color = { 0.2f, 0.5f, 1.0f, 1.0f };
 	particleMaterialData->uvTransform = Math::MakeIdentity4x4();
 
 
 	D3D12_HEAP_PROPERTIES uploadHeapProperties{};
 	uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
-	DirectX::ScratchImage mipImages = LoadTexture("resources/circle2.png");
+	DirectX::ScratchImage mipImages = LoadTexture("resources/gradationLine.png");
 
 	ComPtr<ID3D12Resource> textureResource = dxCommon->CreateTextureResource(mipImages.GetMetadata());
 
@@ -944,19 +1036,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			input->Update();
 
 
+			static float uvOffsetX = 0.0f;
+			uvOffsetX += 0.01f;
+
+			particleMaterialData->uvTransform = Math::MakeIdentity4x4();
+			particleMaterialData->uvTransform.m[3][0] = uvOffsetX;
+
 			Math::Matrix4x4 viewProjectionMatrix = Math::MakeIdentity4x4();
 
 			uint32_t numInstance = 0;
 
 			for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
 
-				// 経過時間を進める
-				particles[index].currentTime += kDeltaTime;
+				// Cylinder確認中は消えないようにする
+				//// 経過時間を進める
+				//particles[index].currentTime += kDeltaTime;
 
-				// 寿命を過ぎたParticleは描画しない
-				if (particles[index].currentTime >= particles[index].lifeTime) {
-					continue;
-				}
+				//// 寿命を過ぎたParticleは描画しない
+				//if (particles[index].currentTime >= particles[index].lifeTime) {
+				//	continue;
+				//}
 
 				// 速度を位置に反映
 				particles[index].transform.translate.x +=
@@ -978,12 +1077,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				Math::Matrix4x4 worldViewProjectionMatrix =
 					Math::Multiply(worldMatrix, viewProjectionMatrix);
 
-				float alpha = 1.0f - (particles[index].currentTime / particles[index].lifeTime);
+				//float alpha = 1.0f - (particles[index].currentTime / particles[index].lifeTime);
 
 				instancingData[numInstance].WVP = worldViewProjectionMatrix;
 				instancingData[numInstance].World = worldMatrix;
 				instancingData[numInstance].color = particles[index].color;
-				instancingData[numInstance].color.w = alpha;
+				instancingData[numInstance].color.w = 1.0f;
 
 				// 生きているParticle数を数える
 				++numInstance;
@@ -1160,18 +1259,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			);
 
 			// リング描画
-			commandList->DrawInstanced(
-				kRingDivide * 6,
-				numInstance,
-				0,
-				0
-			);
+			//commandList->DrawInstanced(
+			//	kRingDivide * 6,
+			//	numInstance,
+			//	0,
+			//	0
+			//);
 
 			// Plane描画
-			commandList->IASetVertexBuffers(0, 1, &planeVertexBufferView);
+			//commandList->IASetVertexBuffers(0, 1, &planeVertexBufferView);
+
+			//commandList->DrawInstanced(
+			//	6,
+			//	numInstance,
+			//	0,
+			//	0
+			//);
+
+			// Cylinder描画
+			commandList->IASetVertexBuffers(0, 1, &cylinderVertexBufferView);
 
 			commandList->DrawInstanced(
-				6,
+				kCylinderDivide * 6,
 				numInstance,
 				0,
 				0
