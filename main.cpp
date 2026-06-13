@@ -392,9 +392,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//Samplerの設定
 	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
 	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 	staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 	staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
 	staticSamplers[0].ShaderRegister = 0;
@@ -466,7 +466,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 // ==================================================
 
 // インスタンス数
-	const uint32_t kNumMaxInstance = 10;
+	const uint32_t kNumMaxInstance = 6;
 
 	std::random_device seedGenerator;
 	std::mt19937 randomEngine(seedGenerator());
@@ -500,40 +500,36 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			float angle = distAngle(randomEngine);
 			float speed = distSpeed(randomEngine);
 
-			// 細長いPlaneにする
+
 			particle.transform.scale = {
-				0.03f,
-				distScaleY(randomEngine),
-				1.0f
+	            0.20f,
+            	0.35f,
+	            1.0f
 			};
 
-			// 放射状に回転させる
 			particle.transform.rotate = {
 				0.0f,
 				0.0f,
 				angle
 			};
 
-			// 中心から出す
 			particle.transform.translate = {
 				0.0f,
 				0.0f,
 				0.0f
 			};
 
-			// 動かさない
 			particle.velocity = {
 				0.0f,
 				0.0f,
 				0.0f
 			};
 
-			// HitEffectっぽく白にする
 			particle.color = {
 				1.0f,
 				1.0f,
 				1.0f,
-				1.0f
+				0.6f
 			};
 
 			particle.lifeTime = distTime(randomEngine);
@@ -684,56 +680,146 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-// Particle用 頂点データ
-// ==================================================
+    // Particle用 頂点データ
+    // ==================================================
 	struct ParticleVertexData
 	{
 		Math::Vector4 position;
 		Math::Vector2 texcoord;
 	};
 
-	ComPtr<ID3D12Resource> particleVertexResource =
-		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * 6);
+	const uint32_t kRingDivide = 32;
+	const float kOuterRadius = 1.0f;
+	const float kInnerRadius = 0.9f;
+	const float radianPerDivide = 2.0f * 3.14159265f / float(kRingDivide);
 
-	D3D12_VERTEX_BUFFER_VIEW particleVertexBufferView{};
-	particleVertexBufferView.BufferLocation =
-		particleVertexResource->GetGPUVirtualAddress();
-	particleVertexBufferView.SizeInBytes =
-		sizeof(ParticleVertexData) * 6;
-	particleVertexBufferView.StrideInBytes =
+
+	ComPtr<ID3D12Resource> ringVertexResource =
+		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * kRingDivide * 6);
+
+	D3D12_VERTEX_BUFFER_VIEW ringVertexBufferView{};
+	ringVertexBufferView.BufferLocation =
+		ringVertexResource->GetGPUVirtualAddress();
+	ringVertexBufferView.SizeInBytes =
+		sizeof(ParticleVertexData) * kRingDivide * 6;
+	ringVertexBufferView.StrideInBytes =
 		sizeof(ParticleVertexData);
 
-	ParticleVertexData* particleVertexData = nullptr;
-	particleVertexResource->Map(
+	ParticleVertexData* ringVertexData = nullptr;
+	ringVertexResource->Map(
 		0,
 		nullptr,
-		reinterpret_cast<void**>(&particleVertexData)
+		reinterpret_cast<void**>(&ringVertexData)
 	);
 
-	// 1枚目の三角形
-	particleVertexData[0].position = { -0.5f, -0.5f, 0.0f, 1.0f };
-	particleVertexData[0].texcoord = { 0.0f, 1.0f };
+	for (uint32_t index = 0; index < kRingDivide; ++index) {
 
-	particleVertexData[1].position = { -0.5f,  0.5f, 0.0f, 1.0f };
-	particleVertexData[1].texcoord = { 0.0f, 0.0f };
+		float sin = std::sin(index * radianPerDivide);
+		float cos = std::cos(index * radianPerDivide);
 
-	particleVertexData[2].position = { 0.5f, -0.5f, 0.0f, 1.0f };
-	particleVertexData[2].texcoord = { 1.0f, 1.0f };
+		float sinNext = std::sin((index + 1) * radianPerDivide);
+		float cosNext = std::cos((index + 1) * radianPerDivide);
 
-	// 2枚目の三角形
-	particleVertexData[3].position = { -0.5f,  0.5f, 0.0f, 1.0f };
-	particleVertexData[3].texcoord = { 0.0f, 0.0f };
+		float u = float(index) / float(kRingDivide);
+		float uNext = float(index + 1) / float(kRingDivide);
 
-	particleVertexData[4].position = { 0.5f,  0.5f, 0.0f, 1.0f };
-	particleVertexData[4].texcoord = { 1.0f, 0.0f };
+		uint32_t vertexIndex = index * 6;
 
-	particleVertexData[5].position = { 0.5f, -0.5f, 0.0f, 1.0f };
-	particleVertexData[5].texcoord = { 1.0f, 1.0f };
+		// 1枚目の三角形
+		ringVertexData[vertexIndex + 0].position = {
+			sin * kOuterRadius,
+			cos * kOuterRadius,
+			0.0f,
+			1.0f
+		};
+		ringVertexData[vertexIndex + 0].texcoord = { u, 0.0f };
+
+		ringVertexData[vertexIndex + 1].position = {
+			sinNext * kOuterRadius,
+			cosNext * kOuterRadius,
+			0.0f,
+			1.0f
+		};
+		ringVertexData[vertexIndex + 1].texcoord = { uNext, 0.0f };
+
+		ringVertexData[vertexIndex + 2].position = {
+			sin * kInnerRadius,
+			cos * kInnerRadius,
+			0.0f,
+			1.0f
+		};
+		ringVertexData[vertexIndex + 2].texcoord = { u, 1.0f };
+
+		// 2枚目の三角形
+		ringVertexData[vertexIndex + 3].position = {
+			sinNext * kOuterRadius,
+			cosNext * kOuterRadius,
+			0.0f,
+			1.0f
+		};
+		ringVertexData[vertexIndex + 3].texcoord = { uNext, 0.0f };
+
+		ringVertexData[vertexIndex + 4].position = {
+			sinNext * kInnerRadius,
+			cosNext * kInnerRadius,
+			0.0f,
+			1.0f
+		};
+		ringVertexData[vertexIndex + 4].texcoord = { uNext, 1.0f };
+
+		ringVertexData[vertexIndex + 5].position = {
+			sin * kInnerRadius,
+			cos * kInnerRadius,
+			0.0f,
+			1.0f
+		};
+		ringVertexData[vertexIndex + 5].texcoord = { u, 1.0f };
+	}
+
+	// ==================================================
+    // Plane用 頂点データ
+    // ==================================================
+	ComPtr<ID3D12Resource> planeVertexResource =
+		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * 6);
+
+	D3D12_VERTEX_BUFFER_VIEW planeVertexBufferView{};
+	planeVertexBufferView.BufferLocation =
+		planeVertexResource->GetGPUVirtualAddress();
+	planeVertexBufferView.SizeInBytes =
+		sizeof(ParticleVertexData) * 6;
+	planeVertexBufferView.StrideInBytes =
+		sizeof(ParticleVertexData);
+
+	ParticleVertexData* planeVertexData = nullptr;
+	planeVertexResource->Map(
+		0,
+		nullptr,
+		reinterpret_cast<void**>(&planeVertexData)
+	);
+
+	// 細長いPlane
+	planeVertexData[0].position = { -0.03f, -0.7f, 0.0f, 1.0f };
+	planeVertexData[0].texcoord = { 0.0f, 1.0f };
+
+	planeVertexData[1].position = { -0.03f,  0.7f, 0.0f, 1.0f };
+	planeVertexData[1].texcoord = { 0.0f, 0.0f };
+
+	planeVertexData[2].position = { 0.03f, -0.7f, 0.0f, 1.0f };
+	planeVertexData[2].texcoord = { 1.0f, 1.0f };
+
+	planeVertexData[3].position = { -0.03f,  0.7f, 0.0f, 1.0f };
+	planeVertexData[3].texcoord = { 0.0f, 0.0f };
+
+	planeVertexData[4].position = { 0.03f,  0.7f, 0.0f, 1.0f };
+	planeVertexData[4].texcoord = { 1.0f, 0.0f };
+
+	planeVertexData[5].position = { 0.03f, -0.7f, 0.0f, 1.0f };
+	planeVertexData[5].texcoord = { 1.0f, 1.0f };
 
 
 	// ==================================================
-// Particle用 MaterialResource
-// ==================================================
+    // Particle用 MaterialResource
+    // ==================================================
 	struct ParticleMaterial
 	{
 		Math::Vector4 color;
@@ -757,7 +843,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	D3D12_HEAP_PROPERTIES uploadHeapProperties{};
 	uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
-	DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
+	DirectX::ScratchImage mipImages = LoadTexture("resources/circle2.png");
 
 	ComPtr<ID3D12Resource> textureResource = dxCommon->CreateTextureResource(mipImages.GetMetadata());
 
@@ -1050,7 +1136,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			commandList->SetPipelineState(particleGraphicsPipelineState);
 
 			// 頂点バッファ
-			commandList->IASetVertexBuffers(0, 1, &particleVertexBufferView);
+			commandList->IASetVertexBuffers(0, 1, &ringVertexBufferView);
 
 			// 三角形リスト
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1073,7 +1159,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				dxCommon->GetSRVGPUDescriptorHandle(4)
 			);
 
-			// 6頂点の板ポリを10個描画
+			// リング描画
+			commandList->DrawInstanced(
+				kRingDivide * 6,
+				numInstance,
+				0,
+				0
+			);
+
+			// Plane描画
+			commandList->IASetVertexBuffers(0, 1, &planeVertexBufferView);
+
 			commandList->DrawInstanced(
 				6,
 				numInstance,
