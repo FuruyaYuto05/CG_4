@@ -14,10 +14,13 @@
 #include <dxcapi.h>
 #include <fstream>
 #include <sstream>
+#include <random>
+
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/DirectXTex/DirectXTex.h"
+
 #include "WinApp.h"
 #include "DirectXCommon.h"
 #include <wrl.h>
@@ -462,21 +465,71 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 // ==================================================
 
 // インスタンス数
-	const uint32_t kNumInstance = 10;
+	const uint32_t kNumMaxInstance = 10;
+
+	std::random_device seedGenerator;
+	std::mt19937 randomEngine(seedGenerator());
 
 	// Instancing用の変換行列データ
-	struct TransformationMatrix
+	struct ParticleForGPU
 	{
 		Math::Matrix4x4 WVP;
 		Math::Matrix4x4 World;
+		Math::Vector4 color;
 	};
+
+	struct Particle
+	{
+		Math::Transform transform;
+		Math::Vector3 velocity;
+		Math::Vector4 color;
+		float lifeTime;
+		float currentTime;
+	};
+
+	auto MakeNewParticle = [](std::mt19937& randomEngine) -> Particle
+		{
+			std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+			std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
+			std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
+
+			Particle particle;
+
+			particle.transform.scale = { 1.0f, 1.0f, 1.0f };
+			particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+
+			particle.transform.translate = {
+				distribution(randomEngine),
+				distribution(randomEngine),
+				distribution(randomEngine)
+			};
+
+			particle.velocity = {
+				distribution(randomEngine),
+				distribution(randomEngine),
+				distribution(randomEngine)
+			};
+
+			particle.color = {
+				distColor(randomEngine),
+				distColor(randomEngine),
+				distColor(randomEngine),
+				1.0f
+			};
+
+			particle.lifeTime = distTime(randomEngine);
+
+			particle.currentTime = 0.0f;
+
+			return particle;
+		};
 
 	// Instancing用Resourceを作る
 	ComPtr<ID3D12Resource> instancingResource =
-		dxCommon->CreateBufferResource(sizeof(TransformationMatrix) * kNumInstance);
+		dxCommon->CreateBufferResource(sizeof(ParticleForGPU) * kNumMaxInstance);
 
 	// 書き込むためのアドレスを取得
-	TransformationMatrix* instancingData = nullptr;
+	ParticleForGPU* instancingData = nullptr;
 
 	instancingResource->Map(
 		0,
@@ -485,9 +538,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	);
 
 	// 単位行列を書き込んでおく
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
+	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
 		instancingData[index].WVP = Math::MakeIdentity4x4();
 		instancingData[index].World = Math::MakeIdentity4x4();
+		instancingData[index].color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	}
 
 	// ==================================================
@@ -500,8 +554,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	instancingSrvDesc.Buffer.FirstElement = 0;
 	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-	instancingSrvDesc.Buffer.NumElements = kNumInstance;
-	instancingSrvDesc.Buffer.StructureByteStride = sizeof(TransformationMatrix);
+	instancingSrvDesc.Buffer.NumElements = kNumMaxInstance;
+	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 
 	// 今回はSRVヒープの3番をInstancing用に使う
 	dxCommon->GetDevice()->CreateShaderResourceView(
@@ -510,21 +564,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		dxCommon->GetSRVCPUDescriptorHandle(3)
 	);
 
+
 	// ==================================================
-// Instancing用Transformの作成
-// ==================================================
-	Math::Transform transforms[kNumInstance];
+    // Particle配列の作成
+    // ==================================================
+	Particle particles[kNumMaxInstance];
 
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
-		transforms[index].scale = { 1.0f, 1.0f, 1.0f };
-		transforms[index].rotate = { 0.0f, 0.0f, 0.0f };
-		transforms[index].translate = {
-			index * 0.1f,
-			index * 0.1f,
-			index * 0.1f
-		};
+	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+		particles[index] = MakeNewParticle(randomEngine);
 	}
-
 	D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
 	inputElementDesc[0].SemanticName = "POSITION";
 	inputElementDesc[0].SemanticIndex = 0;
@@ -544,7 +592,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
 	blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
 
 	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
 	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
@@ -557,7 +605,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
 	depthStencilDesc.DepthEnable = true;
-	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
 
@@ -776,6 +824,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	object3d_2->SetTranslate({ 2.0f, 0.0f, 0.0f }); // 少し右にずらす
 	object3d_2->SetRotate({ 0.0f, 0.0f, 0.0f });
 
+	//deltaTimeの設定
+	const float kDeltaTime = 1.0f / 60.0f;
+
 	//ウィンドウの×ボタンが押されるまでループ
 	while (true) {
 
@@ -791,20 +842,49 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			Math::Matrix4x4 viewProjectionMatrix = Math::MakeIdentity4x4();
 
-			for (uint32_t index = 0; index < kNumInstance; ++index) {
+			uint32_t numInstance = 0;
+
+			for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+
+				// 経過時間を進める
+				particles[index].currentTime += kDeltaTime;
+
+				// 寿命を過ぎたParticleは描画しない
+				if (particles[index].currentTime >= particles[index].lifeTime) {
+					continue;
+				}
+
+				// 速度を位置に反映
+				particles[index].transform.translate.x +=
+					particles[index].velocity.x * kDeltaTime;
+
+				particles[index].transform.translate.y +=
+					particles[index].velocity.y * kDeltaTime;
+
+				particles[index].transform.translate.z +=
+					particles[index].velocity.z * kDeltaTime;
+
 				Math::Matrix4x4 worldMatrix =
 					Math::MakeAffineMatrix(
-						transforms[index].scale,
-						transforms[index].rotate,
-						transforms[index].translate
+						particles[index].transform.scale,
+						particles[index].transform.rotate,
+						particles[index].transform.translate
 					);
 
 				Math::Matrix4x4 worldViewProjectionMatrix =
 					Math::Multiply(worldMatrix, viewProjectionMatrix);
 
-				instancingData[index].WVP = worldViewProjectionMatrix;
-				instancingData[index].World = worldMatrix;
+				float alpha = 1.0f - (particles[index].currentTime / particles[index].lifeTime);
+
+				instancingData[numInstance].WVP = worldViewProjectionMatrix;
+				instancingData[numInstance].World = worldMatrix;
+				instancingData[numInstance].color = particles[index].color;
+				instancingData[numInstance].color.w = alpha;
+
+				// 生きているParticle数を数える
+				++numInstance;
 			}
+
 
 
 			//object3d->Update();
@@ -978,7 +1058,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// 6頂点の板ポリを10個描画
 			commandList->DrawInstanced(
 				6,
-				kNumInstance,
+				numInstance,
 				0,
 				0
 			);
