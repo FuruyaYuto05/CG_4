@@ -90,10 +90,12 @@ void SpriteCommon::CreateGraphicsPipelineState() {
     rastrizeDesc.CullMode = D3D12_CULL_MODE_NONE;
     rastrizeDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
-    // Shader Compile (dxCommon_を利用してシェーダーコンパイルを呼び出す)
-    ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0");
+    ComPtr<IDxcBlob> vertexShaderBlob =
+        dxCommon_->CompileShader(L"resources/shaders/Sprite.VS.hlsl", L"vs_6_0");
     assert(vertexShaderBlob != nullptr);
-    ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0");
+
+    ComPtr<IDxcBlob> pixelShaderBlob =
+        dxCommon_->CompileShader(L"resources/shaders/Sprite.PS.hlsl", L"ps_6_0");
     assert(pixelShaderBlob != nullptr);
 
     // DepthStencilState 

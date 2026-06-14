@@ -249,6 +249,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	skybox->Initialize(dxCommon, kSkyboxTexturePath); 
 
+	uint32_t environmentTextureIndex =
+		TextureManager::GetInstance()->GetTextureIndexByFilePath(kSkyboxTexturePath);
+
+
+
 	////DXGIファクトリーの作成
 	IDXGIFactory7* dxgiFactory = nullptr;
 	////HRESULTはWindows刑のエラーコードであり、
@@ -294,8 +299,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	descriptorRangeForObjectTexture[0].OffsetInDescriptorsFromTableStart =
 		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+	// EnvironmentTexture用SRV
+	D3D12_DESCRIPTOR_RANGE descriptorRangeForEnvironmentTexture[1] = {};
+	descriptorRangeForEnvironmentTexture[0].BaseShaderRegister = 1; // t1
+	descriptorRangeForEnvironmentTexture[0].NumDescriptors = 1;
+	descriptorRangeForEnvironmentTexture[0].RangeType =
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descriptorRangeForEnvironmentTexture[0].OffsetInDescriptorsFromTableStart =
+		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
 	// Object3d用RootParameter
-	D3D12_ROOT_PARAMETER rootParametersForObject[3] = {};
+	D3D12_ROOT_PARAMETER rootParametersForObject[5] = {};
 
 	// Material用 b0
 	rootParametersForObject[0].ParameterType =
@@ -322,15 +336,34 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	rootParametersForObject[2].DescriptorTable.NumDescriptorRanges =
 		_countof(descriptorRangeForObjectTexture);
 
+	// Camera用 b1
+	rootParametersForObject[3].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParametersForObject[3].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParametersForObject[3].Descriptor.ShaderRegister = 1;
+
+	// EnvironmentTexture用 t1
+	rootParametersForObject[4].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParametersForObject[4].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParametersForObject[4].DescriptorTable.pDescriptorRanges =
+		descriptorRangeForEnvironmentTexture;
+	rootParametersForObject[4].DescriptorTable.NumDescriptorRanges =
+		_countof(descriptorRangeForEnvironmentTexture);
+
+
 	descriptionRootSignatureForObject.pParameters =
 		rootParametersForObject;
 	descriptionRootSignatureForObject.NumParameters =
 		_countof(rootParametersForObject);
 
+	
 
 	// ==================================================
-// Particle用 RootSignature
-// ==================================================
+    // Particle用 RootSignature
+    // ==================================================
 	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignatureForParticle{};
 	descriptionRootSignatureForParticle.Flags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -461,6 +494,35 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	);
 	assert(SUCCEEDED(hr));
 
+	// ==================================================
+    // Camera用Resourceの作成
+    // ==================================================
+	struct CameraForGPU
+	{
+		Math::Vector3 worldPosition;
+		float padding;
+	};
+
+	ComPtr<ID3D12Resource> cameraResource =
+		dxCommon->CreateBufferResource(sizeof(CameraForGPU));
+
+	CameraForGPU* cameraData = nullptr;
+
+	cameraResource->Map(
+		0,
+		nullptr,
+		reinterpret_cast<void**>(&cameraData)
+	);
+
+	// とりあえずカメラ位置
+	cameraData->worldPosition = {
+		0.0f,
+		0.0f,
+		-5.0f
+	};
+
+	cameraData->padding = 0.0f;
+
 // ==================================================
 // Instancing用Resourceの作成
 // ==================================================
@@ -571,11 +633,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	instancingSrvDesc.Buffer.NumElements = kNumMaxInstance;
 	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 
+	const uint32_t kInstancingSrvIndex = 100;
+	const uint32_t kParticleTextureSrvIndex = 101;
+
 	// 今回はSRVヒープの3番をInstancing用に使う
 	dxCommon->GetDevice()->CreateShaderResourceView(
 		instancingResource.Get(),
 		&instancingSrvDesc,
-		dxCommon->GetSRVCPUDescriptorHandle(3)
+		dxCommon->GetSRVCPUDescriptorHandle(kInstancingSrvIndex)
 	);
 
 
@@ -953,7 +1018,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	dxCommon->GetDevice()->CreateShaderResourceView(
 		textureResource.Get(), // ComPtrなので .Get()
 		&srvDesc,
-		dxCommon->GetSRVCPUDescriptorHandle(4) // 0番目のSRVヒープスロットを使用すると仮定
+		dxCommon->GetSRVCPUDescriptorHandle(kParticleTextureSrvIndex) // 0番目のSRVヒープスロットを使用すると仮定
 	);
 
 	//ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
@@ -1198,12 +1263,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			//object3d->Draw();
 
-			// 描画
-			
+		    // Camera用 b1 / rootParameter[3]
+			dxCommon->GetCommandList()->SetGraphicsRootConstantBufferView(
+				3,
+				cameraResource->GetGPUVirtualAddress()
+			);
+
+			dxCommon->GetCommandList()->SetGraphicsRootDescriptorTable(
+				4,
+				TextureManager::GetInstance()->GetSrvHandleGPU(environmentTextureIndex)
+			);
+
 			//左
-			//object3d_1->Draw();
+			object3d_1->Draw();
 			//右
-			//object3d_2->Draw();
+			object3d_2->Draw();
 
 			//dxCommon->GetCommandList()->SetPipelineState(object3dCommon->GetGraphicsPipelineStateSkybox());
 
@@ -1249,13 +1323,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// Instancing用SRV t0 / rootParameter[1]
 			commandList->SetGraphicsRootDescriptorTable(
 				1,
-				dxCommon->GetSRVGPUDescriptorHandle(3)
+				dxCommon->GetSRVGPUDescriptorHandle(kInstancingSrvIndex)
 			);
 
 			// Texture用SRV t0 / rootParameter[2]
 			commandList->SetGraphicsRootDescriptorTable(
 				2,
-				dxCommon->GetSRVGPUDescriptorHandle(4)
+				dxCommon->GetSRVGPUDescriptorHandle(kParticleTextureSrvIndex)
 			);
 
 			// リング描画

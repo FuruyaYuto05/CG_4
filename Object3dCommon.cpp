@@ -17,15 +17,25 @@ void Object3dCommon::CreateRootSignature()
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0;
-    descriptorRange[0].NumDescriptors = 1;
-    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    // Texture用 t0
+    D3D12_DESCRIPTOR_RANGE descriptorRangeForTexture[1] = {};
+    descriptorRangeForTexture[0].BaseShaderRegister = 0;
+    descriptorRangeForTexture[0].NumDescriptors = 1;
+    descriptorRangeForTexture[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeForTexture[0].OffsetInDescriptorsFromTableStart =
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    // EnvironmentTexture用 t1
+    D3D12_DESCRIPTOR_RANGE descriptorRangeForEnvironmentTexture[1] = {};
+    descriptorRangeForEnvironmentTexture[0].BaseShaderRegister = 1;
+    descriptorRangeForEnvironmentTexture[0].NumDescriptors = 1;
+    descriptorRangeForEnvironmentTexture[0].RangeType =
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeForEnvironmentTexture[0].OffsetInDescriptorsFromTableStart =
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     // RootParmater作成
     // 平行光源用に rootParameters[3] まで確保
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
+    D3D12_ROOT_PARAMETER rootParameters[5] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -36,13 +46,28 @@ void Object3dCommon::CreateRootSignature()
 
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
-    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
+    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRangeForTexture;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForTexture);
 
-    // 平行光源用
+    //// 平行光源用
+    //rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    //rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    //rootParameters[3].Descriptor.ShaderRegister = 1;
+
+    // Camera用 b1
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
+
+    // EnvironmentTexture用 t1
+    rootParameters[4].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[4].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[4].DescriptorTable.pDescriptorRanges =
+        descriptorRangeForEnvironmentTexture;
+    rootParameters[4].DescriptorTable.NumDescriptorRanges =
+        _countof(descriptorRangeForEnvironmentTexture);
 
     descriptionRootSignature.pParameters = rootParameters;
     descriptionRootSignature.NumParameters = _countof(rootParameters);
@@ -82,6 +107,8 @@ void Object3dCommon::CreateRootSignature()
 
 void Object3dCommon::CreateGraphicsPipeline()
 {
+
+    OutputDebugStringA("Object3dCommon.cpp NORMAL version\n");
     // 最初にルートシグネチャの作成を呼び出す
     CreateRootSignature();
 

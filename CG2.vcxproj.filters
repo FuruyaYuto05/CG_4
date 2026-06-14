@@ -72,9 +72,6 @@
     <ClCompile Include="TextureManager.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="Object3dCommon.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
     <ClCompile Include="Object3d.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
@@ -90,6 +87,9 @@
     <ClCompile Include="Skybox.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="Object3dCommon.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.VS.hlsl" />
@@ -98,6 +98,8 @@
     <FxCompile Include="Skybox.PS.hlsl" />
     <FxCompile Include="resources\shaders\Particle.PS.hlsl" />
     <FxCompile Include="resources\shaders\Particle.VS.hlsl" />
+    <FxCompile Include="Sprite.VS.hlsl" />
+    <FxCompile Include="Sprite.PS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h">
@@ -185,6 +187,7 @@
     <None Include="resources\shaders\Object3d.hlsli" />
     <None Include="Skybox.hlsli" />
     <None Include="resources\shaders\Particle.hlsli" />
+    <None Include="Sprite.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="CG2.rc">

@@ -219,7 +219,7 @@ void Object3d::Draw() {
 
     // 5. 平行光源CBufferの場所を設定
     // (※ rootParameters の 3番目として追加されている想定です)
-    commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
+    // commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
 
     if (model_) {
         model_->Draw();
