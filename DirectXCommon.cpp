@@ -671,7 +671,7 @@ void DirectXCommon::PreDraw(){
 	commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, &dsvHandle);
 
 	// 画面クリア
-	float clearColor[] = { 0.1f,0.25f,0.5f,1.0f };
+	float clearColor[] = { 0.0f,0.0f,0.0f,1.0f };
 	commandList_->ClearRenderTargetView(rtvHandles_[backBufferIndex], clearColor, 0, nullptr);
 
 	// 深度バッファのクリア

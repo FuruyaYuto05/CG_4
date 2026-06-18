@@ -220,11 +220,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	winApp = new WinApp();
 	winApp->Initialize();
 
-	DirectXCommon* dxCommon = nullptr; 
+	DirectXCommon* dxCommon = nullptr;
 
 	// DirectXの初期化
-	dxCommon = new DirectXCommon(); 
-	dxCommon->Initialize(winApp);        
+	dxCommon = new DirectXCommon();
+	dxCommon->Initialize(winApp);
 
 	TextureManager::GetInstance()->SetDirectXCommon(dxCommon);
 
@@ -247,7 +247,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	const std::string kSkyboxTexturePath = "resources/rostock_laage_airport_4k.dds";
 
-	skybox->Initialize(dxCommon, kSkyboxTexturePath); 
+	skybox->Initialize(dxCommon, kSkyboxTexturePath);
 
 	////DXGIファクトリーの作成
 	IDXGIFactory7* dxgiFactory = nullptr;
@@ -329,8 +329,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-// Particle用 RootSignature
-// ==================================================
+    // Particle用 RootSignature
+    // ==================================================
 	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignatureForParticle{};
 	descriptionRootSignatureForParticle.Flags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -407,8 +407,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-// Object3d用 RootSignature を作成
-// ==================================================
+    // Object3d用 RootSignature を作成
+    // ==================================================
 	ID3DBlob* objectSignatureBlob = nullptr;
 	ID3DBlob* objectErrorBlob = nullptr;
 
@@ -461,12 +461,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	);
 	assert(SUCCEEDED(hr));
 
-// ==================================================
-// Instancing用Resourceの作成
-// ==================================================
+	// ==================================================
+	// Instancing用Resourceの作成
+	// ==================================================
 
-// インスタンス数
-	const uint32_t kNumMaxInstance = 1;
+	// インスタンス構成
+	// 0      : 着弾時の衝撃波リング
+	// 1～3   : 青い光柱（外側・中間・白い芯）
+	// 4～31  : 上へ吸い上がる光の筋
+	const uint32_t kRingInstance = 0;
+
+	const uint32_t kCylinderBegin = 1;
+	const uint32_t kCylinderCount = 3;
+	
+	const uint32_t kWispBegin = 4;
+	const uint32_t kNumMaxInstance = 32;
 
 	std::random_device seedGenerator;
 	std::mt19937 randomEngine(seedGenerator());
@@ -482,57 +491,82 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	struct Particle
 	{
 		Math::Transform transform;
+		Math::Vector3 startPosition;
 		Math::Vector3 velocity;
 		Math::Vector4 color;
+		float baseScale;
+		float delay;
 		float lifeTime;
 		float currentTime;
 	};
 
-	auto MakeNewParticle = [](std::mt19937& randomEngine) -> Particle
+	auto MakeNewParticle = [=](std::mt19937& randomEngine, uint32_t index) -> Particle
 		{
-			std::uniform_real_distribution<float> distAngle(0.0f, 6.28f);
-			std::uniform_real_distribution<float> distSpeed(0.5f, 1.5f);
-			std::uniform_real_distribution<float> distScaleY(0.4f, 1.5f);
-			std::uniform_real_distribution<float> distTime(0.3f, 0.8f);
+			std::uniform_real_distribution<float> distX(-0.32f, 0.32f);
+			std::uniform_real_distribution<float> distY(-0.08f, 0.12f);
+			std::uniform_real_distribution<float> distSpeedY(1.25f, 2.15f);// 上昇速度上げたいなら
+			std::uniform_real_distribution<float> distSpeedX(-0.16f, 0.16f);
+			std::uniform_real_distribution<float> distScale(0.65f, 1.25f);
+			std::uniform_real_distribution<float> distDelay(0.0f, 0.22f);
 
-			Particle particle;
+			Particle particle{};
 
-			float angle = distAngle(randomEngine);
-			float speed = distSpeed(randomEngine);
+			if (index == kRingInstance) {
+				// 着弾直後、一瞬だけ白く光って広がるリング
+				particle.transform.scale = { 0.04f, 0.04f, 1.0f };
+				particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+				particle.startPosition = { 0.0f, -0.62f, 0.0f };
+				particle.velocity = { 0.0f, 0.0f, 0.0f };
+				particle.color = { 0.88f, 0.97f, 1.0f, 1.0f };
+				particle.baseScale = 1.0f;
+				particle.delay = 0.0f;
+				particle.lifeTime = 0.34f;
+			} else if (index < kWispBegin) {
+				// 3層の光柱。番号が大きいほど内側の白い芯
+				uint32_t layer = index - kCylinderBegin;
+				const float width[3] = { 0.34f, 0.23f, 0.105f };
+				const Math::Vector4 colors[3] = {
+					{ 0.02f, 0.18f, 1.00f, 0.38f },// 濃い青
+					{ 0.05f, 0.68f, 1.00f, 0.62f },// 水色
+					{ 0.82f, 0.97f, 1.00f, 0.92f } // 白
+				};
 
+				particle.transform.scale = { width[layer], 0.01f, width[layer] };
+				particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+				particle.startPosition = { 0.0f, -0.62f, 0.0f };
+				particle.velocity = { 0.0f, 0.0f, 0.0f };
+				particle.color = colors[layer];
+				particle.baseScale = width[layer];
+				particle.delay = 0.12f + float(layer) * 0.025f;
+				particle.lifeTime = 1.18f;
+			} else {
+				// 光柱に沿って勢いよくブワァーと上へ流れる細い光
+				float size = distScale(randomEngine);
+				float x = distX(randomEngine);
 
-			particle.transform.scale = {
-	            0.25f,
-	            0.25f,
-	            0.25f
-			};
+				particle.transform.scale = {
+					0.45f * size,
+					0.35f * size,
+					1.0f
+				};
+				particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+				particle.startPosition = {
+					x,
+					-0.60f + distY(randomEngine),
+					-0.02f
+				};
+				particle.velocity = {
+					distSpeedX(randomEngine),
+					distSpeedY(randomEngine),
+					0.0f
+				};
+				particle.color = (index % 5 == 0)? Math::Vector4{ 0.92f, 1.00f, 1.00f, 0.90f }: Math::Vector4{ 0.08f, 0.58f, 1.00f, 0.66f };
+				particle.baseScale = size;
+				particle.delay = 0.16f + distDelay(randomEngine);
+				particle.lifeTime = 0.72f;
+			}
 
-			particle.transform.rotate = {
-	            1.2f,
-	            0.0f,
-	            0.0f
-			};
-
-			particle.transform.translate = {
-				0.0f,
-				-0.4f,
-				0.0f
-			};
-
-			particle.velocity = {
-				0.0f,
-				0.0f,
-				0.0f
-			};
-
-			particle.color = {
-				1.0f,
-				1.0f,
-				1.0f,
-				1.0f
-			};
-
-			particle.lifeTime = distTime(randomEngine);
+			particle.transform.translate = particle.startPosition;
 			particle.currentTime = 0.0f;
 
 			return particle;
@@ -559,8 +593,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	}
 
 	// ==================================================
-    // Instancing用SRVの作成
-    // ==================================================
+	// Instancing用SRVの作成
+	// ==================================================
 	D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
 	instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
 	instancingSrvDesc.Shader4ComponentMapping =
@@ -580,12 +614,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-    // Particle配列の作成
-    // ==================================================
+	// Particle配列の作成
+	// ==================================================
 	Particle particles[kNumMaxInstance];
 
 	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
-		particles[index] = MakeNewParticle(randomEngine);
+		particles[index] = MakeNewParticle(randomEngine, index);
 	}
 	D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
 	inputElementDesc[0].SemanticName = "POSITION";
@@ -624,8 +658,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-// Particle用 Shader をCompile
-// ==================================================
+    // Particle用 Shader をCompile
+    // ==================================================
 	IDxcBlob* particleVertexShaderBlob = CompileShader(
 		L"resources/shaders/Particle.VS.hlsl",
 		L"vs_6_0",
@@ -680,8 +714,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-    // Particle用 頂点データ
-    // ==================================================
+	// Particle用 頂点データ
+	// ==================================================
 	struct ParticleVertexData
 	{
 		Math::Vector4 position;
@@ -694,8 +728,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const float radianPerDivide = 2.0f * 3.14159265f / float(kRingDivide);
 
 	const uint32_t kCylinderDivide = 32;
-	const float kTopRadius = 1.0f;
-	const float kBottomRadius = 1.0f;
+	// 上へ行くほど少し広がる青い光柱
+	const float kTopRadius = 1.20f;
+	const float kBottomRadius = 0.42f;
 	const float kHeight = 1.5f;
 	const float cylinderRadianPerDivide =
 		2.0f * 3.14159265f / float(kCylinderDivide);
@@ -783,8 +818,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	}
 
 	// ==================================================
-    // Plane用 頂点データ
-    // ==================================================
+	// Plane用 頂点データ
+	// ==================================================
 	ComPtr<ID3D12Resource> planeVertexResource =
 		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * 6);
 
@@ -824,8 +859,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-    // Cylinder用 頂点データ
-    // ==================================================
+	// Cylinder用 頂点データ
+	// ==================================================
 	ComPtr<ID3D12Resource> cylinderVertexResource =
 		dxCommon->CreateBufferResource(sizeof(ParticleVertexData) * kCylinderDivide * 6);
 
@@ -910,8 +945,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	// ==================================================
-    // Particle用 MaterialResource
-    // ==================================================
+	// Particle用 MaterialResource
+	// ==================================================
 	struct ParticleMaterial
 	{
 		Math::Vector4 color;
@@ -968,7 +1003,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 1. まず、使いたい画像のファイル名をリストにします
 	std::vector<std::string> texFiles = {
 		"resources/uvChecker.png",
-		"monsterBall.png", // ← スライドで使っている別の画像のパスに変えてください
+		"monsterBall.png", 
 		"resources/uvChecker.png",
 		"monsterBall.png",
 		"resources/uvChecker.png"
@@ -988,12 +1023,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		sprite->SetSize({ 128.0f, 128.0f }); // 見やすいサイズに設定
 
 		sprites.push_back(sprite);
-	}	
+	}
 
 	Sprite* sprite = new Sprite();
 	// Initialize()に SpriteCommon などの必要な情報を渡す想定
 	sprite->Initialize(spriteCommon, "resources/uvChecker.png");
-	
+
 	// 1. DirectXCommonの初期化のあと、TextureManagerなどの後が良いです
 	ModelManager::GetInstance()->Initialize(dxCommon);
 
@@ -1001,7 +1036,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// これにより、ModelManager内の map にモデルデータが保管されます
 	ModelManager::GetInstance()->LoadModel("plane.obj");
 	// 他のモデルを使う場合はここに追加します
-    ModelManager::GetInstance()->LoadModel("axis.obj");
+	ModelManager::GetInstance()->LoadModel("axis.obj");
 
 	//Object3d* object3d = new Object3d();
 	//object3d->Initialize(object3dCommon);
@@ -1022,6 +1057,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	//deltaTimeの設定
 	const float kDeltaTime = 1.0f / 60.0f;
+	float effectTimer = 0.0f;
+	const float kEffectLoopTime = 1.75f;
 
 	//ウィンドウの×ボタンが押されるまでループ
 	while (true) {
@@ -1030,42 +1067,106 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// ProcessMessage() が true を返したら WM_QUIT が来たということ
 		if (winApp->ProcessMessage()) {
 			break; // ゲームループを抜ける
-		} 
+		}
 		{
 			//入力の更新  <= ❌ 初期化時に一度だけ呼ばれている
 			input->Update();
 
+			effectTimer += kDeltaTime;
+			if (effectTimer >= kEffectLoopTime) {
+				effectTimer = 0.0f;
+
+				for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+					particles[index] = MakeNewParticle(randomEngine, index);
+				}
+			}
 
 			static float uvOffsetX = 0.0f;
-			uvOffsetX += 0.01f;
+			// gradationLineを縦方向へ流して、光が上昇して見えるようにする
+			uvOffsetX -= 0.025f;
 
 			particleMaterialData->uvTransform = Math::MakeIdentity4x4();
-			particleMaterialData->uvTransform.m[3][0] = uvOffsetX;
+			particleMaterialData->uvTransform.m[3][1] = uvOffsetX;
 
 			Math::Matrix4x4 viewProjectionMatrix = Math::MakeIdentity4x4();
 
-			uint32_t numInstance = 0;
+			// 描画種類ごとにStartInstanceLocationを使うため、
+			// Particle番号とGPUインスタンス番号を一致させる
+			uint32_t numInstance = kNumMaxInstance;
+			for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+				instancingData[index].color.w = 0.0f;
+			}
 
 			for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
 
-				// Cylinder確認中は消えないようにする
-				//// 経過時間を進める
-				//particles[index].currentTime += kDeltaTime;
+				particles[index].currentTime += kDeltaTime;
 
-				//// 寿命を過ぎたParticleは描画しない
-				//if (particles[index].currentTime >= particles[index].lifeTime) {
-				//	continue;
-				//}
+				float localTime =
+					particles[index].currentTime - particles[index].delay;
 
-				// 速度を位置に反映
-				particles[index].transform.translate.x +=
-					particles[index].velocity.x * kDeltaTime;
+				if (localTime < 0.0f || localTime >= particles[index].lifeTime) {
+					continue;
+				}
 
-				particles[index].transform.translate.y +=
-					particles[index].velocity.y * kDeltaTime;
+				float lifeRate = localTime / particles[index].lifeTime;
+				float easeOut =
+					1.0f - (1.0f - lifeRate) * (1.0f - lifeRate);
 
-				particles[index].transform.translate.z +=
-					particles[index].velocity.z * kDeltaTime;
+				if (index == kRingInstance) {
+					// 最初の0.34秒だけ、着弾点を白青く光らせる
+					float ringScale = 0.04f + 0.60f * easeOut;
+					particles[index].transform.scale = {
+						ringScale,
+						ringScale * 0.38f,
+						1.0f
+					};
+					particles[index].transform.rotate.z +=
+						2.5f * kDeltaTime;
+				} else if (index < kWispBegin) {
+					uint32_t layer = index - kCylinderBegin;
+					const float width[3] = { 0.34f, 0.23f, 0.105f };// 濃い青:水色:白
+
+					// 0.18秒ほどで上へ一気に伸びる
+					float growRate = localTime / 0.18f;// 伸びる速度
+					if (growRate > 1.0f) {
+						growRate = 1.0f;
+					}
+					float growEase =
+						1.0f - (1.0f - growRate) * (1.0f - growRate) *
+						(1.0f - growRate);
+
+					// 終盤は細くなりながら消える
+					float shrink = 1.0f;
+					if (lifeRate > 0.68f) {
+						shrink =
+							1.0f - (lifeRate - 0.68f) / 0.32f * 0.72f;
+					}
+
+					particles[index].transform.scale = {
+						width[layer] * shrink, // X:光柱の横幅
+						1.10f * growEase,      // Y:光柱の高さ
+						width[layer] * shrink  // Z:光柱の奥行き
+					};
+					particles[index].transform.translate =
+						particles[index].startPosition;
+				} else {
+					// 根元から上空へ吸い上がる光の筋
+					particles[index].transform.translate.x =
+						particles[index].startPosition.x +
+						particles[index].velocity.x * localTime;
+					particles[index].transform.translate.y =
+						particles[index].startPosition.y +
+						particles[index].velocity.y * localTime;
+					particles[index].transform.translate.z =
+						particles[index].startPosition.z;
+
+					float stretch = 0.35f + 0.75f * easeOut;
+					particles[index].transform.scale.y =
+						stretch * particles[index].baseScale;
+					particles[index].transform.scale.x =
+						0.45f * particles[index].baseScale *
+						(1.0f - 0.55f * lifeRate);
+				}
 
 				Math::Matrix4x4 worldMatrix =
 					Math::MakeAffineMatrix(
@@ -1077,15 +1178,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				Math::Matrix4x4 worldViewProjectionMatrix =
 					Math::Multiply(worldMatrix, viewProjectionMatrix);
 
-				//float alpha = 1.0f - (particles[index].currentTime / particles[index].lifeTime);
+				float alpha = 1.0f - lifeRate;
 
-				instancingData[numInstance].WVP = worldViewProjectionMatrix;
-				instancingData[numInstance].World = worldMatrix;
-				instancingData[numInstance].color = particles[index].color;
-				instancingData[numInstance].color.w = 1.0f;
+				// 光柱は出現直後を強くし、しばらく明るさを保つ
+				if (index >= kCylinderBegin && index < kWispBegin) {
+					if (lifeRate < 0.18f) {
+						alpha = lifeRate / 0.18f;
+					} else if (lifeRate < 0.68f) {
+						alpha = 1.0f;
+					} else {
+						alpha = 1.0f - (lifeRate - 0.68f) / 0.32f;
+					}
+				}
 
-				// 生きているParticle数を数える
-				++numInstance;
+				instancingData[index].WVP = worldViewProjectionMatrix;
+				instancingData[index].World = worldMatrix;
+				instancingData[index].color = particles[index].color;
+				instancingData[index].color.w =
+					particles[index].color.w * alpha;
 			}
 
 
@@ -1104,7 +1214,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			sprite->Update();
 
 			// スプライトの更新
-            // vector の要素を一つずつ取り出す
+			// vector の要素を一つずつ取り出す
 			for (Sprite* sprite : sprites) {
 
 				// 例: 特定のスプライトのみを動かす、または共通のロジック
@@ -1122,11 +1232,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::ShowDemoWindow();
 
 			ImGui::Begin("Settings");
-		
+
 			// 1. 現在の位置を取得
 			Math::Vector2 currentPos = sprite->GetPosition();
 			Math::Vector3 currentRot = sprite->GetRotation();
-			
+
 			Math::Vector2 currentSize = sprite->GetSize();
 
 			// 2. DragFloat2 で編集（ここでは Vector3ではなく Vector2 が適切）
@@ -1199,7 +1309,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//object3d->Draw();
 
 			// 描画
-			
+
 			//左
 			//object3d_1->Draw();
 			//右
@@ -1258,32 +1368,32 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				dxCommon->GetSRVGPUDescriptorHandle(4)
 			);
 
-			// リング描画
-			//commandList->DrawInstanced(
-			//	kRingDivide * 6,
-			//	numInstance,
-			//	0,
-			//	0
-			//);
+			// 着弾時の白青い衝撃波リング
+			commandList->DrawInstanced(
+				kRingDivide * 6,
+				1,
+				0,
+				kRingInstance
+			);
 
-			// Plane描画
-			//commandList->IASetVertexBuffers(0, 1, &planeVertexBufferView);
-
-			//commandList->DrawInstanced(
-			//	6,
-			//	numInstance,
-			//	0,
-			//	0
-			//);
-
-			// Cylinder描画
+			// 外側・中間・芯の3層Cylinder
 			commandList->IASetVertexBuffers(0, 1, &cylinderVertexBufferView);
 
 			commandList->DrawInstanced(
 				kCylinderDivide * 6,
-				numInstance,
+				kCylinderCount,
 				0,
-				0
+				kCylinderBegin
+			);
+
+			// 光柱の周囲を上へ流れる細い光
+			commandList->IASetVertexBuffers(0, 1, &planeVertexBufferView);
+
+			commandList->DrawInstanced(
+				6,
+				numInstance - kWispBegin,
+				0,
+				kWispBegin
 			);
 
 
@@ -1313,7 +1423,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	delete input;
 
 
-	
+
 
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
@@ -1371,6 +1481,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	delete winApp;
 	winApp = nullptr;
 
-	
+
 	return 0;
 }
