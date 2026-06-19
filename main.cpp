@@ -1200,7 +1200,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			}
 
 
-
 			//object3d->Update();
 
 			// 更新
