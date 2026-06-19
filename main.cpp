@@ -560,6 +560,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 					distSpeedY(randomEngine),
 					0.0f
 				};
+				// 5の倍数は白、それ以外は青
 				particle.color = (index % 5 == 0)? Math::Vector4{ 0.92f, 1.00f, 1.00f, 0.90f }: Math::Vector4{ 0.08f, 0.58f, 1.00f, 0.66f };
 				particle.baseScale = size;
 				particle.delay = 0.16f + distDelay(randomEngine);
@@ -1126,8 +1127,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 					uint32_t layer = index - kCylinderBegin;
 					const float width[3] = { 0.34f, 0.23f, 0.105f };// 濃い青:水色:白
 
-					// 0.18秒ほどで上へ一気に伸びる
-					float growRate = localTime / 0.18f;// 伸びる速度
+					// 上へ一気に伸びる速度の調整
+					float growRate = localTime / 0.05f;// 伸びる速度
 					if (growRate > 1.0f) {
 						growRate = 1.0f;
 					}
@@ -1167,7 +1168,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 						0.45f * particles[index].baseScale *
 						(1.0f - 0.55f * lifeRate);
 				}
-
+	
 				Math::Matrix4x4 worldMatrix =
 					Math::MakeAffineMatrix(
 						particles[index].transform.scale,
